@@ -1,5 +1,5 @@
 class Draggable {
-    constructor(container, selector) {
+    constructor(container, selector, settings) {
         this.selector = selector;
         this.container = container;
 
@@ -15,13 +15,17 @@ class Draggable {
 
         this.settings = {
 			initialColour: '#222222',
-			randomiseInitialVelocity: true,
+			randomiseInitialVelocity: false,
 			randomiseColour: false,
 			randomiseOpacity: false,
             edgeFriction: 0.75,
-            friction: 7.5,
-            bounceFriction: 0
+            friction: 1,
+            bounceFriction: 0.5
         };
+		
+		if(typeof settings === 'object') {
+			Object.assign(this.settings, settings);
+		}
 
         this._initObjects();
     }
@@ -52,9 +56,11 @@ class Draggable {
 			}
 			
 			if(this.settings.randomiseInitialVelocity) {
+				let objectRect = object.getBoundingClientRect();
+				
 				this._onMouseDown({
-					clientX: 152,
-					clientY: 120,
+					clientX: objectRect.left + ((objectRect.right - objectRect.left) / 2),
+					clientY: objectRect.top + ((objectRect.bottom - objectRect.top) / 2),
 					currentTarget: object
 				});
 				
@@ -290,11 +296,11 @@ class Draggable {
         object.style.transform = 'matrix(' + matrix.join(', ') + ')';
     }
 	
-	static _parseMatrix(matrix) {
-		let matrixIndex = matrix.indexOf('matrix'),
-			leftBracketIndex = matrix.indexOf('(', matrixIndex),
-			rightBracketIndex = matrix.indexOf(')', leftBracketIndex),
-			matrixSequence = matrix.substring(leftBracketIndex + 1, rightBracketIndex),
+	static _parseMatrix(computedTransform) {
+		let matrixIndex = computedTransform.indexOf('matrix'),
+			leftBracketIndex = computedTransform.indexOf('(', matrixIndex),
+			rightBracketIndex = computedTransform.indexOf(')', leftBracketIndex),
+			matrixSequence = computedTransform.substring(leftBracketIndex + 1, rightBracketIndex),
 			matrixSplit = matrixSequence.split(',').map(element => parseFloat(element));
 		
 		if(matrixIndex === -1 || matrixSplit.length !== 6) {

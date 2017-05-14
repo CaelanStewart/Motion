@@ -33,7 +33,16 @@
         <script>
             let draggable = new Draggable(
                 document.getElementById('container'),
-                '.object'
+                '.object',
+                {
+                    initialColour: '#222222',
+                    randomiseInitialVelocity: false,
+                    randomiseColour: false,
+                    randomiseOpacity: false,
+                    edgeFriction: 0.75,
+                    friction: 1,
+                    bounceFriction: 0.5
+                }
             );
         </script>
     </body>
