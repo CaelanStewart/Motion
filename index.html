@@ -1,49 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>Title</title>
-        <style>
-            #container {
-                position: fixed;
-                top: 100px;
-                left: 100px;
-                width: calc(100% - 200px);
-                height: calc(100% - 200px);
-                background-color: #EEEEEE;
-            }
+	<head>
+		<meta charset="UTF-8">
+		<title>Title</title>
+		<style>
+			#container {
+				position: fixed;
+				top: 100px;
+				left: 100px;
+				width: calc(100% - 200px);
+				height: calc(100% - 200px);
+				background-color: #EEEEEE;
+			}
 
-            #container .object {
-                width: 100px;
-                height: 100px;
-                background-color: #888888;
-                border-radius: 100%;
-                position: absolute;
-                top: 0;
-                left: 0;
-            }
-        </style>
-    </head>
-    <body>
-        <div id="container">
-            <div class="object"></div>
-            <div class="object"></div>
-        </div>
-        <script src="motion.js"></script>
-        <script>
-            let draggable = new Draggable(
-                document.getElementById('container'),
-                '.object',
-                {
-                    initialColour: '#222222',
-                    randomiseInitialVelocity: false,
-                    randomiseColour: false,
-                    randomiseOpacity: false,
-                    edgeFriction: 0.75,
-                    friction: 1,
-                    bounceFriction: 0.5
-                }
-            );
-        </script>
-    </body>
+			#container .object {
+				width: 100px;
+				height: 100px;
+				background-color: #888888;
+				border-radius: 100%;
+				position: absolute;
+				top: 0;
+				left: 0;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="container">
+			<div class="object"></div>
+			<div class="object"></div>
+		</div>
+		<script src="motion.js"></script>
+		<script>
+			let draggable = new Draggable(
+				document.getElementById('container'),
+				'.object',
+				{
+					initialColour: '#222222',
+					randomiseInitialVelocity: false,
+					randomiseColour: false,
+					randomiseOpacity: false,
+					edgeFriction: 0.75,
+					friction: 1,
+					bounceFriction: 0.5
+				}
+			);
+		</script>
+	</body>
 </html>
