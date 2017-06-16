@@ -3,8 +3,8 @@ class Draggable {
 		this.selector = selector;
 		this.container = container;
 
-		document.addEventListener('mousemove', event => this._onMouseMove(event));
-		document.addEventListener('mouseup', event => this._onMouseUp(event));
+		document.addEventListener('mousemove', event => this.onMouseMove(event));
+		document.addEventListener('mouseup', event => this.onMouseUp(event));
 
 		this.currentObject = null;
 
@@ -26,18 +26,103 @@ class Draggable {
 		if(typeof settings === 'object') {
 			Object.assign(this.settings, settings);
 		}
+		
+		this.events = {
+			'drag-end': [ ],
+			'drag-start': [ ],
+			'drag-move': [ ]
+		};
 
-		this._initObjects();
+		this.initObjects();
 	}
 
-	_initObjects() {
+    /**
+	 * Sets an event listener for a given event type
+	 * 
+     * @param {String} event - The event type: 'drag-end' | 'drag-start' | 'drag-move'
+     * @param {function} callback
+     */
+	on(event, callback) {
+		if(typeof this.events[event] !== 'object') {
+			throw new Error('Invalid event type specified');
+		}
+		
+		if(this.events[event].indexOf(callback) !== -1) {
+			return;
+		}
+		
+		this.events[event].push(callback);
+	}
+
+    /**
+	 * Removes a given event listener callback of a given event type
+	 * 
+     * @param {String} event - The event type: 'drag-end' | 'drag-start' | 'drag-move'
+     * @param {function} callback
+     */
+	off(event, callback) {
+        if(typeof this.events[event] !== 'object') {
+            throw new Error('Invalid event type specified');
+        }
+        
+        let callbackIndex = this.events[event].indexOf(callback);
+        
+        if(callbackIndex === -1) {
+        	return;
+		}
+		
+		this.events[event].splice(callbackIndex, 1);
+	}
+
+    /**
+	 * Sets an event listener of a given type that executes exactly once, before being automatically removed.
+	 * 
+     * @param {String} event - The event type: 'drag-end' | 'drag-start' | 'drag-move'
+     * @param callback
+     * @returns {function(this:Draggable)}
+     */
+	once(event, callback) {
+		let closure = (function() {
+            callback.apply(this, arguments);
+
+            this.off(event, callback);
+        }).bind(this);
+		
+		this.on(event, closure);
+		
+		return closure;
+	}
+
+    /**
+	 * Triggers event listeners of a given type, passing along a given array of data as the functions arguments.
+	 * 
+     * @param {String} event - The event type: 'drag-end' | 'drag-start' | 'drag-move'
+     * @param {Array} args - The arguments
+     */
+	trigger(event, args = [ ]) {
+        if(typeof this.events[event] !== 'object') {
+            throw new Error('Invalid event type specified');
+        }
+        
+        this.events[event].forEach(callback => callback.apply(this, args))
+	}
+
+    /**
+	 * Initialises objects to be draggable, can be called again while there are current animations, and only the new
+	 * objects will be initialised.
+     */
+	initObjects() {
 		this.objects = this.container.querySelectorAll(this.selector);
 
 		Array.prototype.forEach.call(this.objects, object => {
 			if(object.classList.contains('draggable-init'))
 				return;
+			
+			object.draggable = false;
+			
+			console.log(object.draggable);
 
-			object.addEventListener('mousedown', event => this._onMouseDown(event));
+			object.addEventListener('mousedown', event => this.onMouseDown(event));
 			
 			if(this.settings.initialColour) {
 				object.style.backgroundColor = this.settings.initialColour;
@@ -58,7 +143,7 @@ class Draggable {
 			if(this.settings.randomiseInitialVelocity) {
 				let objectRect = object.getBoundingClientRect();
 				
-				this._onMouseDown({
+				this.onMouseDown({
 					clientX: objectRect.left + ((objectRect.right - objectRect.left) / 2),
 					clientY: objectRect.top + ((objectRect.bottom - objectRect.top) / 2),
 					currentTarget: object
@@ -69,34 +154,46 @@ class Draggable {
 					Y: Math.random()
 				};
 				
-				this._animateDeceleration(object);
+				this.animateDeceleration(object);
 				
 				this.currentObject = null;
 			}
 		});
 	}
 
-	_onMouseDown(event) {
+    /**
+	 * Event listener callback for 'mousedown' event on objects.
+	 * 
+     * @param event
+     */
+	onMouseDown(event) {
+		event.preventDefault();
+		
 		let object = event.currentTarget;
 
-		Draggable._cacheProperties(object);
-		Draggable._cacheProperties(this.container);
+		Draggable.cacheProperties(object);
+		Draggable.cacheProperties(this.container);
 
-		let cursorPosRelativeToContainer = Draggable._getCursorPositionRelativeTo(event, this.container),
-			cursorPosRelativeToObject = Draggable._getCursorPositionRelativeTo(event, object),
+		let cursorPosRelativeToContainer = Draggable.getCursorPositionRelativeTo(event, this.container),
+			cursorPosRelativeToObject = Draggable.getCursorPositionRelativeTo(event, object),
 			matrixString = window.getComputedStyle(object).transform,
-			matrix = Draggable._parseMatrix(matrixString);
+			matrix = Draggable.parseMatrix(matrixString),
+			position = {
+				X: 0,
+				Y: 0
+			};
 			
-		['X', 'Y'].forEach((axis, index) => matrix[4 + index] = cursorPosRelativeToContainer[axis] - cursorPosRelativeToObject[axis]);
+		['X', 'Y'].forEach(axis => position[axis] = cursorPosRelativeToContainer[axis] - cursorPosRelativeToObject[axis]);
 		
 		Object.assign(object.__draggable_cache, {
 			initialCursorPosRelativeToObject: cursorPosRelativeToObject,
-			objectBounds: Draggable._getBoundsRelativeTo(object, this.container),
+			objectBounds: Draggable.getBoundsRelativeTo(object, this.container),
 			time: Date.now(),
 			velocity: {
 				X: 0,
 				Y: 0
 			},
+			position,
 			matrix
 		});
 
@@ -111,9 +208,18 @@ class Draggable {
 		object.__draggable_mouseIsDown = true;
 
 		this.currentObject = object;
+		
+		this.trigger('drag-start', [object, position]);
 	}
 
-	_onMouseMove(event) {
+    /**
+	 * Event listener callback for 'mousemove' event on objects.
+	 * 
+     * @param event
+     */
+	onMouseMove(event) {
+        event.preventDefault();
+        
 		if(!this.currentObject)
 			return;
 
@@ -121,34 +227,42 @@ class Draggable {
 
 		if(object.__draggable_mouseIsDown) {
 			let cache = object.__draggable_cache,
-				cursorPosRelativeToContainer = Draggable._getCursorPositionRelativeTo(event, this.container),
+				cursorPosRelativeToContainer = Draggable.getCursorPositionRelativeTo(event, this.container),
 				cursorPosRelativeToObject = cache.initialCursorPosRelativeToObject,
 				objectBounds = cache.objectBounds,
 				time = Date.now(),
-				matrix = cache.matrix.slice(0);
+				position = { };
 
 			// Iterate through axis and apply bounds and edge friction
-			['X', 'Y'].forEach((axis, index) => {
-				matrix[4 + index] = cursorPosRelativeToContainer[axis] - cursorPosRelativeToObject[axis];
+			[['X', 'width'], ['Y', 'height']].forEach(([axis, dimension]) => {
+				position[axis] = cursorPosRelativeToContainer[axis] - cursorPosRelativeToObject[axis];
 				
 				['min', 'max'].forEach(bound => {
-					if(Math[bound](matrix[4 + index], objectBounds[bound + axis]) === matrix[4 + index])
-						matrix[4 + index] = objectBounds[bound + axis] + ((matrix[4 + index] - objectBounds[bound + axis]) * (1 - this.settings.edgeFriction));
+					if(Math[bound](position[axis], objectBounds[bound + axis]) === position[axis]) {
+						position[axis] = objectBounds[bound + axis] + ((position[axis] - objectBounds[bound + axis]) * (1 - this.settings.edgeFriction));
+					}
 				});
 			});
 
 			let deltaTime = time - cache.time;
 
-			['X', 'Y'].forEach((axis, index) => cache.velocity[axis] = (matrix[4 + index] - cache.matrix[4 + index]) / deltaTime);
+			['X', 'Y'].forEach((axis, index) => cache.velocity[axis] = (position[axis] - cache.position[axis]) / deltaTime);
 			
-			cache.matrix = matrix;
+			cache.position = position;
 			cache.time = time;
 
-			Draggable._setObjectMatrix(object, cache.matrix);
+			Draggable.setObjectMatrix(object, position);
+
+            this.trigger('drag-move', [object, cache])
 		}
 	}
 
-	_onMouseUp() {
+    /**
+	 * Event listener callback for 'mouseup' event on objects.
+     */
+	onMouseUp(event) {
+        event.preventDefault();
+        
 		if(!this.currentObject) {
 			return;
 		}
@@ -158,7 +272,7 @@ class Draggable {
 			time = Date.now(),
 			deltaTime = time - cache.time,
 			objectBounds = cache.objectBounds,
-			matrix = cache.matrix;
+			position = cache.position;
 
 		if(deltaTime > 50) {
 			cache.velocity.X = cache.velocity.Y = 0;
@@ -166,17 +280,22 @@ class Draggable {
 
 		['X', 'Y'].forEach((axis, index) => {
 			['min', 'max'].forEach(bound => {
-				if(Math[bound](matrix[4 + index], objectBounds[bound + axis]) === matrix[4 + index])
-					cache.velocity[axis] = -((matrix[4 + index] - objectBounds[bound + axis]) / 100);
+				if(Math[bound](position[axis], objectBounds[bound + axis]) === position[axis])
+					cache.velocity[axis] = -((position[axis] - objectBounds[bound + axis]) / 100);
 			});
 		});
 
-		this._animateDeceleration(this.currentObject);
+		this.animateDeceleration(this.currentObject);
 
 		this.currentObject = null;
 	}
 
-	_animateDeceleration(object) {
+    /**
+	 * Animate the deceleration on a given object.
+	 * 
+     * @param object - HTMLElement, Must have been initialised first
+     */
+	animateDeceleration(object) {
 		let cache = object.__draggable_cache;
 
 		if(Math.abs(cache.velocity.X) > 0 || Math.abs(cache.velocity.Y) > 0) {
@@ -189,14 +308,17 @@ class Draggable {
 			this.animationLoopRunning = true;
 
 			window.requestAnimationFrame(
-				this._progressAnimations.bind(this)
+				this.progressAnimations.bind(this)
 			);
 		}
 	}
 
-	_progressAnimations() {
+    /**
+	 * Progresses all current animations (technically, they're simulations, but... just semantics).
+     */
+	progressAnimations() {
 		if(!this._progressAnimations_bound) {
-			this._progressAnimations_bound = this._progressAnimations.bind(this);
+			this._progressAnimations_bound = this.progressAnimations.bind(this);
 		}
 
 		let stack = this.decelerationStack,
@@ -208,31 +330,33 @@ class Draggable {
 				deltaTime = time - cache.time,
 				objectBounds = cache.objectBounds,
 				velocity = { },
-				matrix = cache.matrix.slice(0);
+				position = { };
+			
+			Object.assign(position, cache.position);
 
 			['X', 'Y'].forEach((axis, axisIndex) => {
 				velocity[axis] = cache.velocity[axis] * (1 - (deltaTime / 1000 * this.settings.friction));
 				
 				if(velocity[axis]) {
-					matrix[4 + axisIndex] = cache.matrix[4 + axisIndex] + (velocity[axis] * deltaTime);
+					position[axis] = cache.position[axis] + (velocity[axis] * deltaTime);
 				}
 
 				['min', 'max'].forEach(bound => {
-					if(Math[bound](matrix[4 + axisIndex], objectBounds[bound + axis]) === matrix[4 + axisIndex] && Math.sign(velocity[axis]) === Math[bound](1, -1)) {
+					if(Math[bound](position[axis], objectBounds[bound + axis]) === position[axis] && Math.sign(velocity[axis]) === Math[bound](1, -1)) {
 						velocity[axis] = -(velocity[axis] * (1 - this.settings.bounceFriction));
-						matrix[4 + axisIndex] = objectBounds[bound + axis];
+                        position[axis] = objectBounds[bound + axis];
 					}
 				});
 			});
 
-			Draggable._setObjectMatrix(object, matrix);
+			Draggable.setObjectMatrix(object, position);
 
 			if(Math.abs(velocity.X) < 0.001 && Math.abs(velocity.Y) < 0.001) {
 				toRemoveFromStack.push(index);
 			}
 
 			cache.time = time;
-			cache.matrix = matrix;
+			cache.position = position;
 			cache.velocity = velocity;
 		});
 
@@ -251,23 +375,46 @@ class Draggable {
 		}
 	}
 
-	static _getBoundsRelativeTo(object, to) {
+    /**
+	 * Get bounds of object relative to a given object.
+	 * 
+     * @param object - HTMLElement, must have been initialised by Draggable
+     * @param to - HTMLElement: the element containing the given object
+     * @returns {{minX: number, minY: number, maxX: number, maxY: number}}
+     */
+	static getBoundsRelativeTo(object, to) {
 		let objectCache = object.__draggable_cache,
 			toCache = to.__draggable_cache,
 			objectRect = objectCache.rect,
-			toRect = toCache.rect;
+			toRect = toCache.rect,
+			bounds = {
+                minX: 0,
+                minY: 0,
+                maxX: (toRect.right - toRect.left) - (objectRect.right - objectRect.left),
+                maxY: (toRect.bottom - toRect.top) - (objectRect.bottom - objectRect.top)
+            };
+		
+		[['width', 'X'], ['height', 'Y']].forEach(([dimension, axis]) => {
+			if(objectRect[dimension] > toRect[dimension]) {
+				console.log('Bounds', dimension, axis, objectRect[dimension], toRect[dimension]);
+				bounds['min' + axis] = -(objectRect[dimension] - toRect[dimension]);
+                bounds['max' + axis] = 0;
+			}
+		});
 
-		return {
-			minX: 0,
-			minY: 0,
-			maxX: (toRect.right - toRect.left) - (objectRect.right - objectRect.left),
-			maxY: (toRect.bottom - toRect.top) - (objectRect.bottom - objectRect.top)
-		};
+		return bounds;
 	}
 
-	static _getPositionRelativeTo(object, to) {
-		let objectCache = object.__draggable_cache,
-			toCache = to.__draggable_cache;
+    /**
+	 * Get position of object relative to a given element
+	 * 
+     * @param object - HTMLElement: Must have been initialised by Draggable
+     * @param to - HTMLElement: the element to get a relative position to
+     * @returns {{X: number, Y: number}}
+     */
+	static getPositionRelativeTo(object, to) {
+		let objectCache = Draggable.getCache(object),
+			toCache = Draggable.getCache(to);
 
 		return {
 			X: objectCache.rect.left - toCache.rect.left,
@@ -275,8 +422,15 @@ class Draggable {
 		};
 	}
 
-	static _getCursorPositionRelativeTo(event, to) {
-		let properties = to.__draggable_cache;
+    /**
+	 * Get cursor position relative to a given object.
+	 * 
+     * @param {MouseEvent} event - A MouseEvent object
+     * @param to - The element to get the cursor position relative to
+     * @returns {{X: number, Y: number}}
+     */
+	static getCursorPositionRelativeTo(event, to) {
+		let properties = Draggable.getCache(to);
 
 		return {
 			X: event.clientX - properties.rect.left,
@@ -284,7 +438,13 @@ class Draggable {
 		}
 	}
 
-	static _cacheProperties(object) {
+    /**
+	 * Creates a cache object as a property of the given element object, and saves dimension information about the given
+	 * object.
+	 * 
+     * @param object
+     */
+	static cacheProperties(object) {
 		if(typeof object.__draggable_cache !== 'object') {
 			object.__draggable_cache = { };
 		}
@@ -292,11 +452,39 @@ class Draggable {
 		object.__draggable_cache.rect = object.getBoundingClientRect();
 	}
 
-	static _setObjectMatrix(object, matrix) {
-		object.style.transform = 'matrix(' + matrix.join(', ') + ')';
+    /**
+	 * Returns the cache object property. Just syntactic sugar around the '__draggable_cache' object.
+	 * 
+     * @param object
+     * @returns {*}
+     */
+	static getCache(object) {
+		return object.__draggable_cache;
 	}
-	
-	static _parseMatrix(computedTransform) {
+
+    /**
+	 * Sets matrix of a given object to a given position, and then performs the transformation.
+	 * 
+     * @param object - HTMLElement: must have been initialised by Draggable
+     * @param {object} position - The position of the object
+     */
+	static setObjectMatrix(object, position) {
+		let cache = Draggable.getCache(object),
+			rect = cache.rect;
+		
+		[['X', 'width', 0], ['Y', 'height', 3]].forEach(([axis, dimension, scale], index) => cache.matrix[4 + index] = position[axis] - (cache.matrix[scale] * rect[dimension]));
+		
+		object.style.transform = 'matrix(' + cache.matrix.join(', ') + ')';
+	}
+
+    /**
+	 * Parses a given computed transformation, and returns an array. Returns a default matrix with no scale, translation
+	 * etc if the given matrix string could not be parsed.
+	 * 
+     * @param computedTransform
+     * @returns {Array}
+     */
+	static parseMatrix(computedTransform) {
 		let matrixIndex = computedTransform.indexOf('matrix'),
 			leftBracketIndex = computedTransform.indexOf('(', matrixIndex),
 			rightBracketIndex = computedTransform.indexOf(')', leftBracketIndex),
