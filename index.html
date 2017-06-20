@@ -11,9 +11,10 @@
 				width: calc(100% - 200px);
 				height: calc(100% - 200px);
 				background-color: #EEEEEE;
+				overflow: hidden;
 			}
 
-			#container .object {
+			#container div.object {
 				width: 100px;
 				height: 100px;
 				background-color: #888888;
@@ -21,13 +22,20 @@
 				position: absolute;
 				top: 0;
 				left: 0;
+				transform: scale(1.25);
+			}
+			
+			#container img.object {
+				display: block;
+				position: absolute;
+				
+				transform: scale(0.5);
 			}
 		</style>
 	</head>
 	<body>
 		<div id="container">
-			<div class="object"></div>
-			<div class="object"></div>
+			<img class="object" src="iphone.jpg" />
 		</div>
 		<script src="motion.js"></script>
 		<script>
@@ -40,10 +48,18 @@
 					randomiseColour: false,
 					randomiseOpacity: false,
 					edgeFriction: 0.75,
-					friction: 1,
-					bounceFriction: 0.5
+					friction: 5,
+					bounceFriction: 0.8
 				}
 			);
+			
+			let zoomScaleElements = document.querySelectorAll('.zoom-scale');
+			
+			function applyZoom(object, scale) {
+				object.style.transform = 'scale(' + scale + ')';
+				
+				draggable.initObject(object);
+			};
 		</script>
 	</body>
 </html>

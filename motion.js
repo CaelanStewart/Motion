@@ -118,9 +118,9 @@ class Draggable {
 			if(object.classList.contains('draggable-init'))
 				return;
 			
-			object.draggable = false;
+			this.initObject(object);
 			
-			console.log(object.draggable);
+			object.draggable = false;
 
 			object.addEventListener('mousedown', event => this.onMouseDown(event));
 			
@@ -159,6 +159,39 @@ class Draggable {
 				this.currentObject = null;
 			}
 		});
+	}
+	
+	initObject(object) {
+		Draggable.cacheProperties(object);
+		Draggable.cacheProperties(this.container);
+
+		let matrixString = window.getComputedStyle(object).transform,
+			matrix = Draggable.parseMatrix(matrixString),
+			position = Draggable.getPositionRelativeTo(object, this.container),
+			objectBounds = Draggable.getBoundsRelativeTo(object, this.container),
+			cache = Draggable.getCache(object);
+		
+		Object.assign(cache, {
+			time: Date.now(),
+			velocity: {
+				X: 0,
+				Y: 0
+			},
+			objectBounds,
+			position,
+			matrix
+		});
+		
+		Draggable.setObjectMatrix(object, position);
+		
+		['X', 'Y'].forEach((axis, index) => {
+			['min', 'max'].forEach(bound => {
+				if(Math[bound](position[axis], objectBounds[bound + axis]) === position[axis])
+					cache.velocity[axis] = -((position[axis] - objectBounds[bound + axis]) / 100);
+			});
+		});
+
+		this.animateDeceleration(object);
 	}
 
     /**
@@ -232,7 +265,7 @@ class Draggable {
 				objectBounds = cache.objectBounds,
 				time = Date.now(),
 				position = { };
-
+				
 			// Iterate through axis and apply bounds and edge friction
 			[['X', 'width'], ['Y', 'height']].forEach(([axis, dimension]) => {
 				position[axis] = cursorPosRelativeToContainer[axis] - cursorPosRelativeToObject[axis];
@@ -396,7 +429,6 @@ class Draggable {
 		
 		[['width', 'X'], ['height', 'Y']].forEach(([dimension, axis]) => {
 			if(objectRect[dimension] > toRect[dimension]) {
-				console.log('Bounds', dimension, axis, objectRect[dimension], toRect[dimension]);
 				bounds['min' + axis] = -(objectRect[dimension] - toRect[dimension]);
                 bounds['max' + axis] = 0;
 			}
@@ -470,9 +502,14 @@ class Draggable {
      */
 	static setObjectMatrix(object, position) {
 		let cache = Draggable.getCache(object),
+			matrix = cache.matrix,
 			rect = cache.rect;
 		
-		[['X', 'width', 0], ['Y', 'height', 3]].forEach(([axis, dimension, scale], index) => cache.matrix[4 + index] = position[axis] - (cache.matrix[scale] * rect[dimension]));
+		//[['X', 'width', 0], ['Y', 'height', 3]].forEach(([axis, dimension, scale], index) => cache.matrix[4 + index] = position[axis]);
+		[['X', 'width', 0], ['Y', 'height', 3]]
+			.forEach(
+				([axis, dimension, scale], index) => matrix[4 + index] = position[axis] - ((rect[dimension] / matrix[scale]) - rect[dimension]) / 2
+			);
 		
 		object.style.transform = 'matrix(' + cache.matrix.join(', ') + ')';
 	}
